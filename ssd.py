@@ -35,7 +35,7 @@ class SSD(nn.Module):
         self.size = size
         
         # SSD network
-        # self.vgg = nn.ModuleList(base)
+        self.vgg = nn.ModuleList(base)
         # Layer learns to scale the l2 normalized features from conv4_3
         self.L2Norm = L2Norm(512, 20)
         self.extras = nn.ModuleList(extras)
@@ -142,7 +142,7 @@ def vgg(cfg, i, batch_norm=False):
     conv6 = nn.Conv2d(512, 1024, kernel_size=3, padding=6, dilation=6)
     conv7 = nn.Conv2d(1024, 1024, kernel_size=1)
     layers += [pool5, conv6,
-               nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
+            nn.ReLU(inplace=True), conv7, nn.ReLU(inplace=True)]
     return layers
 
 

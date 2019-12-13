@@ -1,4 +1,4 @@
-from data import *
+from data.vhr import *
 from utils.augmentations import SSDAugmentation
 from layers.modules import MultiBoxLoss
 from ssd import build_ssd
@@ -12,8 +12,10 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.init as init
 import torch.utils.data as data
+import torchvision.transforms as transforms
 import numpy as np
 import argparse
+import pdb as ipdb
 
 
 def str2bool(v):
@@ -23,9 +25,9 @@ def str2bool(v):
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 train_set = parser.add_mutually_exclusive_group()
-parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO', 'VHR'],
-                    type=str, help='VOC COCO or VHR')
-parser.add_argument('--dataset_root', default=VOC_ROOT,
+# parser.add_argument('--dataset', default='VHR', 
+#                     type=str, help='only VHR supported')
+parser.add_argument('--dataset_root', default='../../Datasets/VHR-10_dataset',
                     help='Dataset root directory path')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth',
                     help='Pretrained base model')
@@ -37,7 +39,7 @@ parser.add_argument('--start_iter', default=0, type=int,
                     help='Resume training at this iter')
 parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers used in dataloading')
-parser.add_argument('--cuda', default=True, type=str2bool,
+parser.add_argument('--cuda', default=False, type=str2bool,
                     help='Use CUDA to train model')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
                     help='initial learning rate')
@@ -64,43 +66,26 @@ if torch.cuda.is_available():
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
 
-if not os.path.exists(args.save_folder):
-    os.mkdir(args.save_folder)
 
+if args.visdom:
+    import visdom
+    viz = visdom.Visdom()
 
 def train():
-    if args.dataset == 'COCO':
-        if args.dataset_root == VOC_ROOT:
-            if not os.path.exists(COCO_ROOT):
-                parser.error('Must specify dataset_root if specifying dataset')
-            print("WARNING: Using default COCO dataset_root because " +
-                  "--dataset_root was not specified.")
-            args.dataset_root = COCO_ROOT
-        cfg = coco
-        dataset = COCODetection(root=args.dataset_root,
-                                transform=SSDAugmentation(cfg['min_dim'],
-                                                          MEANS))
-    elif args.dataset == 'VOC':
-        if args.dataset_root == COCO_ROOT:
-            parser.error('Must specify dataset if specifying dataset_root')
-        cfg = voc
-        dataset = VOCDetection(root=args.dataset_root,
-                               transform=SSDAugmentation(cfg['min_dim'],
-                                                         MEANS))
-
-    if args.visdom:
-        import visdom
-        viz = visdom.Visdom()
+    cfg = vhr
+    transform = transforms.Compose([transforms.Resize((300, 300)) ,
+                                    transforms.ToTensor()])  
+    dataset = vhrData(args.dataset_root, transform=transform)
 
     ssd_net = build_ssd('train', cfg['min_dim'], cfg['num_classes'])
     net = ssd_net
 
     if args.cuda:
         net = torch.nn.DataParallel(ssd_net)
-        cudnn.benchmark = True
-
+        cudnn.benchmark = True  # 稍微提高运行速度，没有额外开支
+    
     if args.resume:
-        print('Resuming training, loading {}...'.format(args.resume))
+        print('Resume training, loading {}...'.format(args.resmue))
         ssd_net.load_weights(args.resume)
     else:
         vgg_weights = torch.load(args.save_folder + args.basenet)
@@ -109,10 +94,9 @@ def train():
 
     if args.cuda:
         net = net.cuda()
-
+    
     if not args.resume:
         print('Initializing weights...')
-        # initialize newly added layers' weights with xavier method
         ssd_net.extras.apply(weights_init)
         ssd_net.loc.apply(weights_init)
         ssd_net.conf.apply(weights_init)
@@ -122,61 +106,64 @@ def train():
     criterion = MultiBoxLoss(cfg['num_classes'], 0.5, True, 0, True, 3, 0.5,
                              False, args.cuda)
 
+    
     net.train()
-    # loss counters
     loc_loss = 0
     conf_loss = 0
     epoch = 0
     print('Loading the dataset...')
 
     epoch_size = len(dataset) // args.batch_size
-    print('Training SSD on:', dataset.name)
+    print('Training SSD on: VHR')
     print('Using the specified args:')
     print(args)
 
     step_index = 0
 
     if args.visdom:
-        vis_title = 'SSD.PyTorch on ' + dataset.name
+        vis_title = 'SSD.PyTorch on VHR'
         vis_legend = ['Loc Loss', 'Conf Loss', 'Total Loss']
         iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
         epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
-
+    1
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate,
                                   pin_memory=True)
+
     # create batch iterator
     batch_iterator = iter(data_loader)
     for iteration in range(args.start_iter, cfg['max_iter']):
+        # update visdom and reset epoch loss counters
         if args.visdom and iteration != 0 and (iteration % epoch_size == 0):
             update_vis_plot(epoch, loc_loss, conf_loss, epoch_plot, None,
                             'append', epoch_size)
-            # reset epoch loss counters
             loc_loss = 0
             conf_loss = 0
             epoch += 1
-
+        
         if iteration in cfg['lr_steps']:
             step_index += 1
+            # TODO: adjust learning rate function
             adjust_learning_rate(optimizer, args.gamma, step_index)
-
-        # load train data
+        
         images, targets = next(batch_iterator)
-
+        
         if args.cuda:
             images = Variable(images.cuda())
             targets = [Variable(ann.cuda(), volatile=True) for ann in targets]
         else:
             images = Variable(images)
             targets = [Variable(ann, volatile=True) for ann in targets]
-        # forward
+    
+        ipdb.set_trace()
+        # Forward
         t0 = time.time()
         out = net(images)
-        # backprop
+        # Backprop
         optimizer.zero_grad()
-        loss_l, loss_c = criterion(out, targets)
-        loss = loss_l + loss_c
+        loss_l, loss_c = criterion(out, targets)  # TODO: change loss function
+        loss = loss_c + loss_l
         loss.backward()
         optimizer.step()
         t1 = time.time()
@@ -184,30 +171,20 @@ def train():
         conf_loss += loss_c.data[0]
 
         if iteration % 10 == 0:
-            print('timer: %.4f sec.' % (t1 - t0))
-            print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
+           print('timer: %.4f sec.' % (t1 - t0))
+           print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
 
         if args.visdom:
             update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
                             iter_plot, epoch_plot, 'append')
 
-        if iteration != 0 and iteration % 5000 == 0:
+        if iteration != 0 and iteration % 500 == 0:
             print('Saving state, iter:', iteration)
-            torch.save(ssd_net.state_dict(), 'weights/ssd300_COCO_' +
+            torch.save(ssd_net.state_dict(), 'weights/ssd300_VHR_' +
                        repr(iteration) + '.pth')
+        
     torch.save(ssd_net.state_dict(),
                args.save_folder + '' + args.dataset + '.pth')
-
-
-def adjust_learning_rate(optimizer, gamma, step):
-    """Sets the learning rate to the initial LR decayed by 10 at every
-        specified step
-    # Adapted from PyTorch Imagenet example:
-    # https://github.com/pytorch/examples/blob/master/imagenet/main.py
-    """
-    lr = args.lr * (gamma ** (step))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
 
 
 def xavier(param):
@@ -249,6 +226,10 @@ def update_vis_plot(iteration, loc, conf, window1, window2, update_type,
             win=window2,
             update=True
         )
+
+
+def adjust_learning_rate(a, b, c):
+    pass
 
 
 if __name__ == '__main__':

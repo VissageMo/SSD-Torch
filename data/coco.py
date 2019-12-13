@@ -120,12 +120,14 @@ class COCODetection(data.Dataset):
         img_id = self.ids[index]
         target = self.coco.imgToAnns[img_id]
         ann_ids = self.coco.getAnnIds(imgIds=img_id)
-
         target = self.coco.loadAnns(ann_ids)
+        
+        # Read image from root + path use CV2
         path = osp.join(self.root, self.coco.loadImgs(img_id)[0]['file_name'])
         assert osp.exists(path), 'Image path does not exist: {}'.format(path)
         img = cv2.imread(osp.join(self.root, path))
         height, width, _ = img.shape
+
         if self.target_transform is not None:
             target = self.target_transform(target, width, height)
         if self.transform is not None:
