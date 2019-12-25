@@ -39,7 +39,7 @@ parser.add_argument('--start_iter', default=0, type=int,
                     help='Resume training at this iter')
 parser.add_argument('--num_workers', default=4, type=int,
                     help='Number of workers used in dataloading')
-parser.add_argument('--cuda', default=False, type=str2bool,
+parser.add_argument('--cuda', default=True, type=str2bool,
                     help='Use CUDA to train model')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
                     help='initial learning rate')
@@ -78,11 +78,9 @@ def train():
     dataset = vhrData(args.dataset_root, transform=transform)
 
     ssd_net = build_ssd('train', cfg['min_dim'], cfg['num_classes'])
-    net = ssd_net
+    # net = ssd_net
 
-    if args.cuda:
-        net = torch.nn.DataParallel(ssd_net)
-        cudnn.benchmark = True  # 稍微提高运行速度，没有额外开支
+
     
     if args.resume:
         print('Resume training, loading {}...'.format(args.resmue))
@@ -93,7 +91,9 @@ def train():
         ssd_net.vgg.load_state_dict(vgg_weights)
 
     if args.cuda:
-        net = net.cuda()
+        ssd_net = ssd_net.cuda()
+        # ssd_net = torch.nn.DataParallel(ssd_net)
+        cudnn.benchmark = True  # 稍微提高运行速度，没有额外开支
     
     if not args.resume:
         print('Initializing weights...')
@@ -101,13 +101,13 @@ def train():
         ssd_net.loc.apply(weights_init)
         ssd_net.conf.apply(weights_init)
 
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum,
+    optimizer = optim.SGD(ssd_net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.weight_decay)
     criterion = MultiBoxLoss(cfg['num_classes'], 0.5, True, 0, True, 3, 0.5,
                              False, args.cuda)
 
     
-    net.train()
+    ssd_net.train()
     loc_loss = 0
     conf_loss = 0
     epoch = 0
@@ -156,10 +156,10 @@ def train():
             images = Variable(images)
             targets = [Variable(ann, volatile=True) for ann in targets]
     
-        ipdb.set_trace()
+        # ipdb.set_trace()
         # Forward
         t0 = time.time()
-        out = net(images)
+        out = ssd_net(images)
         # Backprop
         optimizer.zero_grad()
         loss_l, loss_c = criterion(out, targets)  # TODO: change loss function

@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import pandas as pd
+import cv2
+import pdb as ipdb
 
 
 # gt_dir = 'gTBox.csv'
@@ -116,6 +118,7 @@ class vhrData(data.Dataset):
         """
         file_name, bbox = self.imgs[index], self.bbox[index]
         img = cv2.imread(osp.join(self.root, self.train_dir, file_name))
+
         if show_box:
             for _, pos in enumerate(bbox):
                 cv2.rectangle(img, (pos[0], pos[1]), (pos[2], pos[3]), (0, 255, 0), 4)
@@ -125,6 +128,7 @@ class vhrData(data.Dataset):
 if __name__ == '__main__':
     test_data = vhrData('../../Datasets/VHR-10_dataset')
     print(len(test_data))
-    img_test = test_data.pull_image(np.random.randint(600))
+    
+    img_test = test_data.pull_image(np.random.randint(600), show_box=True)
     plt.imshow(img_test)
     plt.waitforbuttonpress()

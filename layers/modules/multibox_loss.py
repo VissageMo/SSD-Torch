@@ -91,9 +91,9 @@ class MultiBoxLoss(nn.Module):
         loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
 
         # Compute max conf across batch for hard negative mining
-        batch_conf = conf_data.view(-1, self.num_classes)
+        batch_conf = conf_data.view(-1, self.num_classes)  # conf_data:[32, 8732,11] -> batch_conf:[279424, 11]
         ipdb.set_trace()
-        loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
+        loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))  # conf_t[32, 8732], batch_conf[279424, 11]
 
         # Hard Negative Mining
         loss_c[pos] = 0  # filter out pos boxes for now
