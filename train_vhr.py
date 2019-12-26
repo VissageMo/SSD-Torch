@@ -31,7 +31,7 @@ parser.add_argument('--dataset_root', default='../../Datasets/VHR-10_dataset',
                     help='Dataset root directory path')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth',
                     help='Pretrained base model')
-parser.add_argument('--batch_size', default=32, type=int,
+parser.add_argument('--batch_size', default=16, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from')
@@ -78,10 +78,7 @@ def train():
     dataset = vhrData(args.dataset_root, transform=transform)
 
     ssd_net = build_ssd('train', cfg['min_dim'], cfg['num_classes'])
-    # net = ssd_net
 
-
-    
     if args.resume:
         print('Resume training, loading {}...'.format(args.resmue))
         ssd_net.load_weights(args.resume)
@@ -90,16 +87,17 @@ def train():
         print('Loading base network...')
         ssd_net.vgg.load_state_dict(vgg_weights)
 
-    if args.cuda:
-        ssd_net = ssd_net.cuda()
-        # ssd_net = torch.nn.DataParallel(ssd_net)
-        cudnn.benchmark = True  # 稍微提高运行速度，没有额外开支
-    
     if not args.resume:
         print('Initializing weights...')
         ssd_net.extras.apply(weights_init)
         ssd_net.loc.apply(weights_init)
         ssd_net.conf.apply(weights_init)
+    
+    if args.cuda:
+        ssd_net = ssd_net.cuda()
+        # ssd_net = torch.nn.DataParallel(ssd_net)
+        cudnn.benchmark = True  # 稍微提高运行速度，没有额外开支
+    
 
     optimizer = optim.SGD(ssd_net.parameters(), lr=args.lr, momentum=args.momentum,
                           weight_decay=args.weight_decay)
@@ -156,7 +154,6 @@ def train():
             images = Variable(images)
             targets = [Variable(ann, volatile=True) for ann in targets]
     
-        # ipdb.set_trace()
         # Forward
         t0 = time.time()
         out = ssd_net(images)
@@ -167,12 +164,15 @@ def train():
         loss.backward()
         optimizer.step()
         t1 = time.time()
-        loc_loss += loss_l.data[0]
-        conf_loss += loss_c.data[0]
+        # loc_loss += loss_l.data[0]
+        # conf_loss += loss_c.data[0]
+        loc_loss += loss_l
+        conf_loss += loss_c
 
         if iteration % 10 == 0:
            print('timer: %.4f sec.' % (t1 - t0))
-           print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
+           print('iter ' + repr(iteration) + ' || Loss: %.4f, %.4f ||' % (loss_c, loss_l), end=' ')
+        #    print('iter ' + repr(iteration) + ' || Loss: %.4f ||' % (loss.data[0]), end=' ')
 
         if args.visdom:
             update_vis_plot(iteration, loss_l.data[0], loss_c.data[0],
