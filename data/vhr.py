@@ -62,7 +62,7 @@ class vhrData(data.Dataset):
         root: Root directory where images are.
 
     """
-    def __init__(self, root, train_dir='../../Datasets/VHR-10_dataset/positive image set', 
+    def __init__(self, root, train_dir='../Datasets/VHR-10_dataset/positive image set', 
                  gt_dir='gTBox.json', transform=None, target_transform=None, obj_num=None):
         imgs = []
         bbox = []

@@ -27,11 +27,11 @@ parser = argparse.ArgumentParser(
 train_set = parser.add_mutually_exclusive_group()
 # parser.add_argument('--dataset', default='VHR', 
 #                     type=str, help='only VHR supported')
-parser.add_argument('--dataset_root', default='../../Datasets/VHR-10_dataset',
+parser.add_argument('--dataset_root', default='../Datasets/VHR-10_dataset',
                     help='Dataset root directory path')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth',
                     help='Pretrained base model')
-parser.add_argument('--batch_size', default=16, type=int,
+parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,
                     help='Checkpoint state_dict file to resume training from')
@@ -123,7 +123,7 @@ def train():
         vis_legend = ['Loc Loss', 'Conf Loss', 'Total Loss']
         iter_plot = create_vis_plot('Iteration', 'Loss', vis_title, vis_legend)
         epoch_plot = create_vis_plot('Epoch', 'Loss', vis_title, vis_legend)
-    1
+    
     data_loader = data.DataLoader(dataset, args.batch_size,
                                   num_workers=args.num_workers,
                                   shuffle=True, collate_fn=detection_collate,
@@ -144,8 +144,12 @@ def train():
             step_index += 1
             # TODO: adjust learning rate function
             adjust_learning_rate(optimizer, args.gamma, step_index)
-        
-        images, targets = next(batch_iterator)
+            
+        try:
+            images, targets = next(batch_iterator)
+        except StopIteration:
+            batch_iterator = iter(data_loader)
+            images, targets = next(batch_iterator)
         
         if args.cuda:
             images = Variable(images.cuda())
